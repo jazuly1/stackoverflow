@@ -21,8 +21,6 @@ Route::group(['middleware' => 'cors'], function(){
 	Route::get('route/routelist', 'Admin\RouteController@getRouteList');
 
 	/* post route */
-	Route::post('asdasdasdad/{param1}/{param2}', 'Admin\RouteController@a212e12e');
-
 	/* put route */
 
 	/* patch route */
