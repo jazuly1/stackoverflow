@@ -1,155 +1,77 @@
-import { Component } from '@angular/core';
-import { BarcodeScanner } from '@ionic-native/barcode-scanner/ngx';
-import { AlertController, ToastController, LoadingController, NavController } from '@ionic/angular';
-import { RestApiService } from '../../services/rest-api.service';
+import { Component, OnInit, ViewChild } from '@angular/core';
+import { Chart } from 'chart.js';
+import { RestApiService } from '../../../services/rest-api.service';
 import { Router, NavigationExtras } from '@angular/router';
 
 @Component({
-  selector: 'app-home',
-  templateUrl: 'home.page.html',
-  styleUrls: ['home.page.scss'],
+  selector: 'app-dashboard',
+  templateUrl: './dashboard.page.html',
+  styleUrls: ['./dashboard.page.scss'],
 })
+export class DashboardPage implements OnInit {
 
-export class HomePage {
-	
-	QRdata = {'qrcodestring':'',person:''};
-	dataProduct:any
-	CekLogin = JSON.parse(localStorage.getItem('userData'));
+  @ViewChild('barChart') barChart;
 
-	constructor(private barcodeScanner: BarcodeScanner,public api: RestApiService, public alertController: AlertController,
-		private router: Router, private loadingController: LoadingController, private toastController: ToastController,
-		public navCtrl: NavController) { }
+  bars:any;
+  colorArray:any;
+  CekLogin = JSON.parse(localStorage.getItem('userData'));
+  dataSurveys:any
 
-	ngOnInit() {
-		console.log(JSON.parse(localStorage.getItem('tempdatasurvey')))
-	}
+  constructor(public api: RestApiService, private router: Router) { }
 
-	async presentAlert(response) {
-	    const alert = await this.alertController.create({
-	      	header: 'Success',
-	      	subHeader: '',
-	      	message: JSON.stringify(response),
-	      	buttons: [
-		      {
-		        text: 'Cancel',
-		        role: 'cancel',
-		        handler: () => {
-		          console.log('Cancel clicked');
-		        }
-		      },
-		      {
-		        text: 'Ok',
-		        handler: () => {
-		          this.router.navigate(['/success-scan-qr']);
-		        }
-		      }
-		    ]
-	    });
+  ngOnInit() {
+  }
 
-	    await alert.present();
-	}
+  ionViewDidEnter() {
+    this.dataSurvey()
+  }
 
-	async presentToast(text) {
-	    const toast = await this.toastController.create({
-	        message: text,
-	        position: 'bottom',
-	        duration: 3000
-	    });
-	    toast.present();
-	}
+  ionViewDidLeave() {
 
-	async warningAlert() {
-	    const alert = await this.alertController.create({
-	      	header: 'Warning!',
-	      	subHeader: '',
-	      	message: 'Data not valid, try to scan again.',
-	      	buttons: ['OK']
-	    });
+  }
 
-	    await alert.present();
-	}
+  dataSurvey() {
+  	this.api.get('product/getsurvey/'+this.CekLogin.data.id)
+	    .subscribe((result:any) => {
 
-	scanQRCode(){
-		this.barcodeScanner.scan().then(barcodeData => {
-		 	this.QRdata.qrcodestring = barcodeData.text
-		 	if (!this.QRdata.qrcodestring) {
-				this.warningAlert()
-			} else {
-				this.inputlogscan();
-			}
-		}).catch(err => {
-		    console.log('Error', err);
-		    this.warningAlert()
-		});
-	}
+    		this.dataSurveys = result.data
 
-	async inputlogscan(){
-		const loading = await this.loadingController.create({
-	        message: 'Loading...',
-	    });
-	    await loading.present();
+    		localStorage.setItem('tempdatasurvey', JSON.stringify(this.dataSurveys.detailProd));
 
-		this.QRdata.person = this.CekLogin.data.id;
+    		if (this.dataSurveys) {
+    			this.createBarChart()
+    		}
 
-		this.api.post(this.QRdata, 'product/store-scan-qrcode')
-		.then( (result:any) => {
-			var response = result
-			if(response['errors'] == 1){
-				this.warningAlert()
-			}else{
+	    })
+    }
 
-				if (response.data.classification === 1) {
+  createBarChart() {
+    this.bars = new Chart(this.barChart.nativeElement, {
+      type: 'pie',
+      data: {
+        labels: this.dataSurveys.prodName,
+        datasets: [{
+          data: this.dataSurveys.prodScore,
+          backgroundColor: this.dataSurveys.prodColor,
+          borderColor: 'rgb(38, 194, 129)',
+          borderWidth: 1
+        }]
+      },
+      options: {
+      	onClick: this.handle,
+        title: {
+            display: false,
+            text: this.dataSurveys,
+        },
+      },
+    });
+  }
 
-					this.dataProduct = response.data
-					this.dataProduct.PersonID = this.CekLogin.data.id
-					loading.dismiss();
-					this.inputTimeKeepingLog()
+  handle(pointer, event) {
+    const blabla = require('../../../../../node_modules/@angular/router');
+    console.log(blabla)
+    blabla.Router.navigate(['/timekeeping'])
+    console.log(event[0]._index, this)
+  }
 
-				} else if (response.data.classification === 8 && this.CekLogin.data.role === 'quality') {
-
-					loading.dismiss();
-					let navigationExtras: NavigationExtras = {
-				        queryParams: {
-				          productID: response.data.id,
-				          category: response.data.category,
-				        }
-				    };
-					this.navCtrl.navigateForward(['/quality'], navigationExtras)
-
-				} else {
-
-					loading.dismiss();
-					let id = response.data.ProductID
-					this.router.navigate(['/success-scan-qr/'+id])
-
-				}
-			}
-
-			this.QRdata.qrcodestring = "";
-
-		})
-	}
-
-	async inputTimeKeepingLog(){
-		const loading = await this.loadingController.create({
-	        message: 'Loading...',
-	    });
-	    
-		this.api.post(this.dataProduct, 'product/timekeeping/store')
-			.then( (result:any) => {
-				var response = result
-				if(response['errors'] == 1){
-					this.warningAlert()
-				} else {
-					loading.dismiss();
-					this.presentToast(response['msg']);
-					this.router.navigate(['/timekeeping'])
-				}
-
-			})
-	}
-
-	underdevelopment(){
-		alert('Under Development!')
-	}
 }
